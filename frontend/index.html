@@ -1,0 +1,987 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Observer Tiny MVP</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d0f14;
+      --panel: #151922;
+      --panel-soft: #1d2430;
+      --line: #2a3342;
+      --text: #eef2f7;
+      --muted: #98a4b5;
+      --green: #35d49f;
+      --teal: #3fbfd0;
+      --amber: #f2bd57;
+      --red: #f06f7f;
+      --violet: #a78bfa;
+      --blue: #6ea8fe;
+      --radius: 8px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-soft);
+      color: var(--text);
+      padding: 0 13px;
+      cursor: pointer;
+      transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+    }
+
+    button:hover {
+      border-color: var(--teal);
+      transform: translateY(-1px);
+    }
+
+    button.primary {
+      border-color: transparent;
+      background: var(--teal);
+      color: #071014;
+      font-weight: 700;
+    }
+
+    button.danger {
+      border-color: color-mix(in srgb, var(--red) 55%, var(--line));
+      color: #ffd9de;
+    }
+
+    input {
+      min-height: 38px;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #0f131b;
+      color: var(--text);
+      padding: 0 11px;
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    code,
+    pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    pre {
+      margin: 0;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #0a0d12;
+      padding: 14px;
+      color: #d7e0ed;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 244px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      border-right: 1px solid var(--line);
+      background: #10141c;
+      padding: 22px 16px;
+    }
+
+    .brand {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 28px;
+    }
+
+    .brand strong {
+      font-size: 19px;
+    }
+
+    .brand span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 7px;
+    }
+
+    .nav a {
+      border-radius: 7px;
+      color: var(--muted);
+      padding: 11px 12px;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .nav a.active,
+    .nav a:hover {
+      background: var(--panel-soft);
+      color: var(--text);
+    }
+
+    .main {
+      min-width: 0;
+      padding: 28px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .title {
+      display: grid;
+      gap: 5px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.05;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin: 0;
+      max-width: 760px;
+      line-height: 1.5;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 9px;
+    }
+
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .kpis {
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+    }
+
+    .two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      padding: 16px;
+      min-width: 0;
+    }
+
+    .kpi {
+      display: grid;
+      gap: 8px;
+      min-height: 106px;
+    }
+
+    .kpi span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .kpi strong {
+      font-size: clamp(20px, 2.5vw, 28px);
+      line-height: 1.1;
+      overflow-wrap: anywhere;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr)) auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      min-width: 860px;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 12px 13px;
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      background: #111720;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 0 9px;
+      background: color-mix(in srgb, var(--green) 15%, transparent);
+      color: #9ff2d5;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .status.failure,
+    .status.error {
+      background: color-mix(in srgb, var(--red) 18%, transparent);
+      color: #ffc0c8;
+    }
+
+    .issue-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .issue {
+      display: grid;
+      gap: 12px;
+    }
+
+    .issue-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 0 9px;
+      color: #081014;
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .badge.critical {
+      background: var(--red);
+    }
+
+    .badge.warning {
+      background: var(--amber);
+    }
+
+    .badge.info {
+      background: var(--blue);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .message {
+      min-height: 24px;
+      color: var(--muted);
+    }
+
+    .error {
+      color: #ffc0c8;
+    }
+
+    canvas {
+      max-height: 330px;
+    }
+
+    @media (max-width: 1040px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .nav {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .topbar {
+        display: grid;
+      }
+
+      .actions {
+        justify-content: flex-start;
+      }
+
+      .kpis,
+      .two,
+      .three,
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .main {
+        padding: 18px;
+      }
+
+      .nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      th,
+      td {
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <strong>LLM Observer</strong>
+        <span>Tiny MVP</span>
+      </div>
+      <nav class="nav" id="nav">
+        <a href="#overview" data-route="overview">Overview</a>
+        <a href="#events" data-route="events">Events</a>
+        <a href="#developers" data-route="developers">Developers</a>
+        <a href="#teams" data-route="teams">Teams</a>
+        <a href="#hygiene" data-route="hygiene">Hygiene</a>
+        <a href="#settings" data-route="settings">Settings</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="title">
+          <h1 id="page-title">Overview</h1>
+          <p class="subtitle" id="page-subtitle">Local LLM usage telemetry with cost, cache and hygiene signals.</p>
+        </div>
+        <div class="actions">
+          <button id="refresh-btn">Refresh</button>
+          <button class="primary" id="seed-btn">Seed demo data</button>
+          <button class="danger" id="clear-btn">Clear events</button>
+        </div>
+      </div>
+
+      <section class="section" id="overview">
+        <div class="grid kpis" id="kpi-grid"></div>
+        <div class="grid two">
+          <article class="card">
+            <h2>Daily Cost By Provider</h2>
+            <canvas id="cost-chart"></canvas>
+          </article>
+          <article class="card">
+            <h2>Token Split</h2>
+            <canvas id="token-chart"></canvas>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="events">
+        <div class="card">
+          <div class="toolbar">
+            <label>User
+              <input id="filter-user" placeholder="demo.user@company.com">
+            </label>
+            <label>Team
+              <input id="filter-team" placeholder="data-platform">
+            </label>
+            <label>Provider
+              <input id="filter-provider" placeholder="openai">
+            </label>
+            <label>Model
+              <input id="filter-model" placeholder="gpt-4o-mini">
+            </label>
+            <button class="primary" id="apply-filters-btn">Apply</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Source</th>
+                <th>User</th>
+                <th>Team</th>
+                <th>Provider</th>
+                <th>Model</th>
+                <th>Input</th>
+                <th>Output</th>
+                <th>Cost</th>
+                <th>Latency</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="events-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="developers">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Team</th>
+                <th>Department</th>
+                <th>Events</th>
+                <th>Cost</th>
+                <th>Tokens</th>
+                <th>Cache hit</th>
+                <th>Context</th>
+                <th>Hygiene</th>
+              </tr>
+            </thead>
+            <tbody id="developers-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="teams">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Team</th>
+                <th>Department</th>
+                <th>Users</th>
+                <th>Events</th>
+                <th>Cost</th>
+                <th>Cache hit</th>
+                <th>Context</th>
+                <th>Top issue</th>
+              </tr>
+            </thead>
+            <tbody id="teams-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="hygiene">
+        <div class="grid three">
+          <article class="card kpi">
+            <span>Company hygiene score</span>
+            <strong id="hygiene-score">100</strong>
+          </article>
+          <article class="card kpi">
+            <span>Active issues</span>
+            <strong id="issue-count">0</strong>
+          </article>
+          <article class="card kpi">
+            <span>Highest saving signal</span>
+            <strong id="saving-signal">0%</strong>
+          </article>
+        </div>
+        <div class="issue-grid" id="issues"></div>
+      </section>
+
+      <section class="section" id="settings">
+        <div class="grid two">
+          <article class="card stack">
+            <h2>API Base URL</h2>
+            <label>Dashboard API base
+              <input id="api-base-input">
+            </label>
+            <div class="actions" style="justify-content:flex-start">
+              <button class="primary" id="save-api-base-btn">Save</button>
+              <button id="test-api-btn">Test connection</button>
+              <button id="manual-event-btn">Send fake event</button>
+            </div>
+            <div class="message" id="settings-message"></div>
+          </article>
+          <article class="card stack">
+            <h2>Integration Guide</h2>
+            <pre>cp .env.example .env
+docker compose up --build
+
+# Optional local sample client
+python -m venv .venv
+source .venv/bin/activate
+pip install requests openai
+python samples/send_fake_event.py
+
+# With OPENAI_API_KEY configured
+python samples/call_openai_via_litellm.py</pre>
+            <p class="muted">Next production steps: Postgres, migrations, auth/RBAC, virtual keys, budgets, alerting, OTel ingestion, CI/CD and IaC.</p>
+          </article>
+        </div>
+      </section>
+
+      <p class="message" id="global-message"></p>
+    </main>
+  </div>
+
+  <script>
+    const DEFAULT_API_BASE = "http://localhost:8080";
+    const routes = {
+      overview: ["Overview", "Local LLM usage telemetry with cost, cache and hygiene signals."],
+      events: ["Events", "Latest normalized calls from demos, samples and LiteLLM."],
+      developers: ["Developers", "Per-user spend, token volume, cache reuse and hygiene."],
+      teams: ["Teams", "Team-level usage and highest visible optimization issue."],
+      hygiene: ["Hygiene", "Practical issues detected from usage patterns."],
+      settings: ["Settings", "Local API configuration and integration commands."]
+    };
+
+    const state = {
+      apiBase: localStorage.getItem("observerApiBase") || DEFAULT_API_BASE,
+      summary: null,
+      events: [],
+      developers: [],
+      teams: [],
+      issues: [],
+      charts: {}
+    };
+
+    const $ = (selector) => document.querySelector(selector);
+
+    function fmtNumber(value) {
+      return new Intl.NumberFormat("en-US").format(value || 0);
+    }
+
+    function fmtMoney(value) {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: value && value < 1 ? 4 : 2
+      }).format(value || 0);
+    }
+
+    function pct(value) {
+      return `${Math.round((value || 0) * 100)}%`;
+    }
+
+    function shortDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString();
+    }
+
+    function routeName() {
+      const hash = window.location.hash.replace("#", "");
+      return routes[hash] ? hash : "overview";
+    }
+
+    function setMessage(message, isError = false) {
+      const element = $("#global-message");
+      element.textContent = message || "";
+      element.classList.toggle("error", isError);
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(`${state.apiBase}${path}`, {
+        headers: {"Content-Type": "application/json"},
+        ...options
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`${response.status} ${response.statusText}: ${text}`);
+      }
+      return response.json();
+    }
+
+    function renderRoute() {
+      const current = routeName();
+      const [title, subtitle] = routes[current];
+      $("#page-title").textContent = title;
+      $("#page-subtitle").textContent = subtitle;
+
+      document.querySelectorAll(".section").forEach((section) => {
+        section.classList.toggle("active", section.id === current);
+      });
+      document.querySelectorAll(".nav a").forEach((link) => {
+        link.classList.toggle("active", link.dataset.route === current);
+      });
+    }
+
+    function renderKpis() {
+      const summary = state.summary || {};
+      const cards = [
+        ["Total cost", fmtMoney(summary.total_cost)],
+        ["Total tokens", fmtNumber(summary.total_tokens)],
+        ["Cache hit rate", pct(summary.cache_hit_rate)],
+        ["Avg latency", `${fmtNumber(Math.round(summary.avg_latency_ms || 0))} ms`],
+        ["Active users", fmtNumber(summary.active_users)],
+        ["Hygiene score", `${summary.hygiene_score ?? 100}`]
+      ];
+      $("#kpi-grid").innerHTML = cards.map(([label, value]) => `
+        <article class="card kpi">
+          <span>${label}</span>
+          <strong>${value}</strong>
+        </article>
+      `).join("");
+    }
+
+    function destroyChart(name) {
+      if (state.charts[name]) {
+        state.charts[name].destroy();
+        state.charts[name] = null;
+      }
+    }
+
+    function renderCostChart() {
+      destroyChart("cost");
+      const grouped = new Map();
+      const providers = new Set();
+      state.events.forEach((event) => {
+        const date = (event.ts || "").slice(0, 10);
+        if (!date) return;
+        providers.add(event.provider || "unknown");
+        if (!grouped.has(date)) grouped.set(date, {});
+        grouped.get(date)[event.provider || "unknown"] = (grouped.get(date)[event.provider || "unknown"] || 0) + (event.total_cost || 0);
+      });
+
+      const labels = Array.from(grouped.keys()).sort();
+      const palette = ["#3fbfd0", "#f2bd57", "#a78bfa", "#35d49f", "#f06f7f", "#6ea8fe"];
+      const datasets = Array.from(providers).sort().map((provider, index) => ({
+        label: provider,
+        data: labels.map((label) => grouped.get(label)[provider] || 0),
+        backgroundColor: palette[index % palette.length]
+      }));
+
+      state.charts.cost = new Chart($("#cost-chart"), {
+        type: "bar",
+        data: {labels, datasets},
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {x: {stacked: true}, y: {stacked: true}},
+          plugins: {legend: {labels: {color: "#eef2f7"}}}
+        }
+      });
+    }
+
+    function renderTokenChart() {
+      destroyChart("tokens");
+      const input = state.events.reduce((sum, event) => sum + Math.max((event.input_tokens || 0) - (event.cached_tokens || 0), 0), 0);
+      const cached = state.events.reduce((sum, event) => sum + (event.cached_tokens || 0), 0);
+      const output = state.events.reduce((sum, event) => sum + (event.output_tokens || 0), 0);
+
+      state.charts.tokens = new Chart($("#token-chart"), {
+        type: "doughnut",
+        data: {
+          labels: ["Input", "Cached", "Output"],
+          datasets: [{
+            data: [input, cached, output],
+            backgroundColor: ["#3fbfd0", "#35d49f", "#f2bd57"],
+            borderColor: "#151922"
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {legend: {labels: {color: "#eef2f7"}}}
+        }
+      });
+    }
+
+    function renderEvents() {
+      $("#events-body").innerHTML = state.events.slice(0, 100).map((event) => `
+        <tr>
+          <td>${shortDate(event.ts)}</td>
+          <td>${event.source || "-"}</td>
+          <td>${event.user_name || event.user_id || "-"}</td>
+          <td>${event.team || "-"}</td>
+          <td>${event.provider || "-"}</td>
+          <td>${event.model || "-"}</td>
+          <td>${fmtNumber(event.input_tokens)}</td>
+          <td>${fmtNumber(event.output_tokens)}</td>
+          <td>${fmtMoney(event.total_cost)}</td>
+          <td>${fmtNumber(event.latency_ms)} ms</td>
+          <td><span class="status ${event.status || ""}">${event.status || "-"}</span></td>
+        </tr>
+      `).join("") || `<tr><td colspan="11" class="muted">No events yet.</td></tr>`;
+    }
+
+    function renderDevelopers() {
+      $("#developers-body").innerHTML = state.developers.map((row) => `
+        <tr>
+          <td>${row.user_name}<br><span class="muted">${row.user_id}</span></td>
+          <td>${row.role}</td>
+          <td>${row.team}</td>
+          <td>${row.department}</td>
+          <td>${fmtNumber(row.total_events)}</td>
+          <td>${fmtMoney(row.total_cost)}</td>
+          <td>${fmtNumber(row.total_tokens)}</td>
+          <td>${pct(row.cache_hit_rate)}</td>
+          <td>${pct(row.avg_context_ratio)}</td>
+          <td>${row.hygiene_score}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="10" class="muted">No developer data yet.</td></tr>`;
+    }
+
+    function renderTeams() {
+      $("#teams-body").innerHTML = state.teams.map((row) => `
+        <tr>
+          <td>${row.team}</td>
+          <td>${row.department}</td>
+          <td>${fmtNumber(row.users)}</td>
+          <td>${fmtNumber(row.total_events)}</td>
+          <td>${fmtMoney(row.total_cost)}</td>
+          <td>${pct(row.cache_hit_rate)}</td>
+          <td>${pct(row.avg_context_ratio)}</td>
+          <td>${row.top_issue}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="8" class="muted">No team data yet.</td></tr>`;
+    }
+
+    function renderHygiene() {
+      $("#hygiene-score").textContent = state.summary?.hygiene_score ?? 100;
+      $("#issue-count").textContent = state.issues.length;
+      const bestSaving = state.issues.reduce((max, issue) => Math.max(max, issue.estimated_saving_pct || 0), 0);
+      $("#saving-signal").textContent = `${bestSaving}%`;
+
+      $("#issues").innerHTML = state.issues.map((issue) => `
+        <article class="card issue">
+          <div class="issue-head">
+            <div>
+              <h2>${issue.id} ${issue.title}</h2>
+              <div class="muted">${issue.estimated_saving_pct}% estimated saving</div>
+            </div>
+            <span class="badge ${issue.severity}">${issue.severity}</span>
+          </div>
+          <p class="muted">${issue.description}</p>
+          <p>${issue.fix}</p>
+          <pre>${issue.code_snippet}</pre>
+          <div class="muted">Affected users: ${issue.affected_users.map((user) => user.user_id).join(", ")}</div>
+        </article>
+      `).join("") || `<article class="card muted">No active hygiene issues.</article>`;
+    }
+
+    function renderSettings() {
+      $("#api-base-input").value = state.apiBase;
+    }
+
+    function renderAll() {
+      renderRoute();
+      renderKpis();
+      renderEvents();
+      renderDevelopers();
+      renderTeams();
+      renderHygiene();
+      renderSettings();
+      if (window.Chart) {
+        renderCostChart();
+        renderTokenChart();
+      }
+    }
+
+    function currentEventQuery() {
+      const params = new URLSearchParams({limit: "5000"});
+      const filters = [
+        ["user_id", $("#filter-user").value.trim()],
+        ["team", $("#filter-team").value.trim()],
+        ["provider", $("#filter-provider").value.trim()],
+        ["model", $("#filter-model").value.trim()]
+      ];
+      filters.forEach(([key, value]) => {
+        if (value) params.set(key, value);
+      });
+      return params.toString();
+    }
+
+    async function loadData() {
+      setMessage("Loading...");
+      try {
+        const [summary, eventsResponse, developers, teams, issues] = await Promise.all([
+          api("/api/summary"),
+          api(`/api/events?${currentEventQuery()}`),
+          api("/api/developers"),
+          api("/api/teams"),
+          api("/api/hygiene/issues")
+        ]);
+        state.summary = summary;
+        state.events = eventsResponse.items || [];
+        state.developers = developers;
+        state.teams = teams;
+        state.issues = issues;
+        renderAll();
+        setMessage(`Connected to ${state.apiBase}. Showing ${eventsResponse.count || 0} matching events.`);
+      } catch (error) {
+        setMessage(error.message, true);
+      }
+    }
+
+    async function seedDemoData() {
+      setMessage("Seeding demo data...");
+      try {
+        await api("/api/demo/seed", {method: "POST", body: JSON.stringify({count: 500})});
+        await loadData();
+      } catch (error) {
+        setMessage(error.message, true);
+      }
+    }
+
+    async function clearEvents() {
+      if (!confirm("Delete all events from the local Observer database?")) return;
+      setMessage("Clearing events...");
+      try {
+        await api("/api/demo/clear", {method: "POST"});
+        await loadData();
+      } catch (error) {
+        setMessage(error.message, true);
+      }
+    }
+
+    async function sendManualEvent() {
+      const inputTokens = 1200 + Math.floor(Math.random() * 1000);
+      const cachedTokens = Math.floor(inputTokens * 0.25);
+      const payload = {
+        ts: new Date().toISOString(),
+        source: "dashboard-manual",
+        user_id: "demo.user@company.com",
+        user_name: "Demo User",
+        team: "data-platform",
+        department: "engineering",
+        app: "sample-app",
+        workflow: "manual-event",
+        provider: "openai",
+        model: "gpt-4o-mini",
+        input_tokens: inputTokens,
+        output_tokens: 160 + Math.floor(Math.random() * 120),
+        cached_tokens: cachedTokens,
+        latency_ms: 600 + Math.floor(Math.random() * 1800),
+        status: "success",
+        retry_count: 0,
+        request_id: `dashboard-${Date.now()}`,
+        raw: {sent_from: "frontend"}
+      };
+
+      const settingsMessage = $("#settings-message");
+      settingsMessage.textContent = "Sending fake event...";
+      try {
+        await api("/api/events", {method: "POST", body: JSON.stringify(payload)});
+        settingsMessage.textContent = "Fake event inserted.";
+        await loadData();
+      } catch (error) {
+        settingsMessage.textContent = error.message;
+        settingsMessage.classList.add("error");
+      }
+    }
+
+    async function testConnection() {
+      const message = $("#settings-message");
+      message.classList.remove("error");
+      message.textContent = "Testing...";
+      try {
+        const result = await api("/health");
+        message.textContent = `API status: ${result.status}, db: ${result.db}`;
+      } catch (error) {
+        message.textContent = error.message;
+        message.classList.add("error");
+      }
+    }
+
+    function saveApiBase() {
+      state.apiBase = $("#api-base-input").value.trim().replace(/\/$/, "") || DEFAULT_API_BASE;
+      localStorage.setItem("observerApiBase", state.apiBase);
+      $("#settings-message").textContent = `Saved ${state.apiBase}`;
+      loadData();
+    }
+
+    window.addEventListener("hashchange", renderRoute);
+    $("#refresh-btn").addEventListener("click", loadData);
+    $("#seed-btn").addEventListener("click", seedDemoData);
+    $("#clear-btn").addEventListener("click", clearEvents);
+    $("#apply-filters-btn").addEventListener("click", loadData);
+    $("#save-api-base-btn").addEventListener("click", saveApiBase);
+    $("#test-api-btn").addEventListener("click", testConnection);
+    $("#manual-event-btn").addEventListener("click", sendManualEvent);
+
+    if (!window.location.hash) {
+      window.location.hash = "#overview";
+    }
+    renderRoute();
+    loadData();
+  </script>
+</body>
+</html>
+
