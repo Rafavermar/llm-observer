@@ -1,0 +1,34 @@
+services:
+  observer-api:
+    build: ./api
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    environment:
+      - OBSERVER_DB_PATH=/data/observer.db
+
+  observer-frontend:
+    image: nginx:alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - observer-api
+
+  litellm-proxy:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "4040:4000"
+    env_file:
+      - .env
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+      - ./litellm/observer_callback.py:/app/observer_callback.py:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    depends_on:
+      - observer-api
+
