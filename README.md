@@ -525,6 +525,12 @@ Recommended next iterations:
 - Add Helm/Terraform only when deployment shape is clear.
 - Add CI/CD with tests, linting and container build checks.
 
+For company rollout guidance, see:
+
+```text
+docs/enterprise-implementation.md
+```
+
 ## Run Tests
 
 ```bash
