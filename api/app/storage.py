@@ -41,6 +41,40 @@ EVENT_COLUMNS = [
     "created_at",
 ]
 
+USER_COLUMNS = [
+    "user_id",
+    "user_name",
+    "email",
+    "role",
+    "team",
+    "department",
+    "source",
+    "active",
+    "created_at",
+    "updated_at",
+]
+
+VIRTUAL_KEY_COLUMNS = [
+    "id",
+    "key_hash",
+    "key_prefix",
+    "user_id",
+    "user_name",
+    "team",
+    "department",
+    "app",
+    "workflow",
+    "provider",
+    "models_json",
+    "max_budget_usd",
+    "budget_duration",
+    "status",
+    "source",
+    "created_at",
+    "expires_at",
+    "last_used_at",
+]
+
 
 def _db_path(db_path: str | None = None) -> str:
     return db_path or get_settings().db_path
@@ -96,6 +130,51 @@ def init_db(db_path: str | None = None) -> None:
         connection.execute("CREATE INDEX IF NOT EXISTS idx_llm_events_team ON llm_events(team)")
         connection.execute("CREATE INDEX IF NOT EXISTS idx_llm_events_provider ON llm_events(provider)")
         connection.execute("CREATE INDEX IF NOT EXISTS idx_llm_events_model ON llm_events(model)")
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS observer_users (
+                user_id TEXT PRIMARY KEY,
+                user_name TEXT,
+                email TEXT,
+                role TEXT,
+                team TEXT,
+                department TEXT,
+                source TEXT,
+                active INTEGER,
+                created_at TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_observer_users_team ON observer_users(team)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_observer_users_department ON observer_users(department)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_observer_users_active ON observer_users(active)")
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS observer_virtual_keys (
+                id TEXT PRIMARY KEY,
+                key_hash TEXT NOT NULL UNIQUE,
+                key_prefix TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                user_name TEXT,
+                team TEXT,
+                department TEXT,
+                app TEXT,
+                workflow TEXT,
+                provider TEXT,
+                models_json TEXT,
+                max_budget_usd REAL,
+                budget_duration TEXT,
+                status TEXT,
+                source TEXT,
+                created_at TEXT,
+                expires_at TEXT,
+                last_used_at TEXT
+            )
+            """
+        )
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_observer_virtual_keys_user_id ON observer_virtual_keys(user_id)")
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_observer_virtual_keys_status ON observer_virtual_keys(status)")
 
 
 def health_check(db_path: str | None = None) -> bool:
@@ -220,4 +299,169 @@ def clear_events(db_path: str | None = None) -> int:
     with _connect(db_path) as connection:
         cursor = connection.execute("DELETE FROM llm_events")
     return int(cursor.rowcount)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _row_to_user(row: sqlite3.Row) -> dict[str, Any]:
+    user = dict(row)
+    user["active"] = bool(user.get("active"))
+    return user
+
+
+def upsert_users(users: list[dict[str, Any]], source: str, db_path: str | None = None) -> list[dict[str, Any]]:
+    now = _now_iso()
+    synced_ids = [user["user_id"] for user in users]
+
+    with _connect(db_path) as connection:
+        for user in users:
+            existing = connection.execute(
+                "SELECT created_at FROM observer_users WHERE user_id = ?",
+                (user["user_id"],),
+            ).fetchone()
+            created_at = existing["created_at"] if existing else now
+            connection.execute(
+                """
+                INSERT INTO observer_users (
+                    user_id, user_name, email, role, team, department, source, active, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    user_name = excluded.user_name,
+                    email = excluded.email,
+                    role = excluded.role,
+                    team = excluded.team,
+                    department = excluded.department,
+                    source = excluded.source,
+                    active = excluded.active,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    user["user_id"],
+                    user.get("user_name"),
+                    user.get("email") or user["user_id"],
+                    user.get("role") or "developer",
+                    user.get("team"),
+                    user.get("department"),
+                    source,
+                    1 if user.get("active", True) else 0,
+                    created_at,
+                    now,
+                ),
+            )
+
+        placeholders = ", ".join("?" for _ in synced_ids)
+        rows = connection.execute(
+            f"SELECT * FROM observer_users WHERE user_id IN ({placeholders}) ORDER BY user_id",
+            synced_ids,
+        ).fetchall()
+
+    return [_row_to_user(row) for row in rows]
+
+
+def sync_demo_users(db_path: str | None = None) -> list[dict[str, Any]]:
+    from . import seed
+
+    users = [
+        {
+            "user_id": user_id,
+            "email": user_id,
+            "user_name": user_name,
+            "role": role,
+            "team": team,
+            "department": department,
+            "active": True,
+        }
+        for user_id, user_name, role, team, department in seed.USERS
+    ]
+    return upsert_users(users, source="demo-seed", db_path=db_path)
+
+
+def list_users(
+    *,
+    active: bool | None = None,
+    query: str | None = None,
+    db_path: str | None = None,
+) -> list[dict[str, Any]]:
+    where: list[str] = []
+    params: list[Any] = []
+
+    if active is not None:
+        where.append("active = ?")
+        params.append(1 if active else 0)
+
+    _append_like_filter(where, params, ["user_id", "user_name", "email", "team", "department"], query)
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    with _connect(db_path) as connection:
+        rows = connection.execute(
+            f"SELECT * FROM observer_users {where_sql} ORDER BY team, user_name, user_id",
+            params,
+        ).fetchall()
+
+    return [_row_to_user(row) for row in rows]
+
+
+def get_user(user_id: str, db_path: str | None = None) -> dict[str, Any] | None:
+    with _connect(db_path) as connection:
+        row = connection.execute("SELECT * FROM observer_users WHERE user_id = ?", (user_id,)).fetchone()
+    return _row_to_user(row) if row else None
+
+
+def _row_to_virtual_key(row: sqlite3.Row) -> dict[str, Any]:
+    virtual_key = dict(row)
+    virtual_key.pop("key_hash", None)
+    try:
+        virtual_key["models"] = json.loads(virtual_key.pop("models_json") or "[]")
+    except json.JSONDecodeError:
+        virtual_key["models"] = []
+    return virtual_key
+
+
+def insert_virtual_key(virtual_key: dict[str, Any], db_path: str | None = None) -> dict[str, Any]:
+    serialized = {column: virtual_key.get(column) for column in VIRTUAL_KEY_COLUMNS}
+    serialized["models_json"] = json.dumps(virtual_key.get("models") or [], sort_keys=True)
+    serialized["created_at"] = virtual_key.get("created_at") or _now_iso()
+    placeholders = ", ".join("?" for _ in VIRTUAL_KEY_COLUMNS)
+    columns = ", ".join(VIRTUAL_KEY_COLUMNS)
+
+    with _connect(db_path) as connection:
+        connection.execute(
+            f"INSERT INTO observer_virtual_keys ({columns}) VALUES ({placeholders})",
+            [serialized[column] for column in VIRTUAL_KEY_COLUMNS],
+        )
+        row = connection.execute(
+            "SELECT * FROM observer_virtual_keys WHERE id = ?",
+            (serialized["id"],),
+        ).fetchone()
+
+    return _row_to_virtual_key(row)
+
+
+def list_virtual_keys(
+    *,
+    user_id: str | None = None,
+    status: str | None = None,
+    db_path: str | None = None,
+) -> list[dict[str, Any]]:
+    where: list[str] = []
+    params: list[Any] = []
+
+    if user_id:
+        where.append("user_id = ?")
+        params.append(user_id)
+
+    if status:
+        where.append("status = ?")
+        params.append(status)
+
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    with _connect(db_path) as connection:
+        rows = connection.execute(
+            f"SELECT * FROM observer_virtual_keys {where_sql} ORDER BY created_at DESC",
+            params,
+        ).fetchall()
+
+    return [_row_to_virtual_key(row) for row in rows]
 

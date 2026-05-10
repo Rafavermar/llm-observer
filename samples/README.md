@@ -34,3 +34,21 @@ If the LiteLLM callback does not fire in your local image, use the direct fallba
 python samples/call_openai_via_litellm.py --also-send-observer-event
 ```
 
+Sync sample users into Observer:
+
+```bash
+python samples/sync_users.py
+```
+
+Request a local Observer virtual key:
+
+```bash
+python samples/request_virtual_key.py --user-id demo.user@company.com
+```
+
+Try real LiteLLM key generation only after LiteLLM key management has Postgres configured:
+
+```bash
+python samples/request_virtual_key.py --user-id demo.user@company.com --try-litellm
+```
+

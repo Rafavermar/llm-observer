@@ -38,3 +38,16 @@ python samples/call_openai_via_litellm.py --also-send-observer-event
 
 Reference: https://docs.litellm.ai/docs/proxy/logging
 
+## Virtual Keys
+
+The current local Compose stack keeps LiteLLM simple so the demo works without Postgres. Observer can still sync users and issue local development keys through:
+
+```text
+POST /api/users/sync
+POST /api/virtual-keys
+```
+
+Real LiteLLM virtual keys require LiteLLM key management with a Postgres `DATABASE_URL`, then `/key/generate` authenticated with `LITELLM_MASTER_KEY`.
+
+Reference: https://docs.litellm.ai/docs/proxy/virtual_keys
+
