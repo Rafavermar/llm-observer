@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 
+PRICE_CATALOG_LAST_VERIFIED = "2026-05-10"
+
 PRICING: dict[str, dict[str, dict[str, float]]] = {
     "openai": {
         "gpt-4o": {"input": 2.50, "output": 10.00, "cached": 1.25},
@@ -18,6 +20,29 @@ PRICING: dict[str, dict[str, dict[str, float]]] = {
     "databricks": {
         "dbrx-instruct": {"input": 0.75, "output": 2.25, "cached": 0.375},
         "llama-3-70b": {"input": 0.54, "output": 1.62, "cached": 0.27},
+    },
+}
+
+PRICING_METADATA: dict[str, dict[str, str]] = {
+    "openai": {
+        "source": "https://developers.openai.com/api/docs/models",
+        "status": "verified",
+        "note": "Retail text-token prices per 1M tokens for the configured OpenAI models.",
+    },
+    "anthropic": {
+        "source": "https://claude.com/pricing",
+        "status": "legacy_estimate",
+        "note": "MVP includes legacy Claude aliases. Verify legacy model availability and pricing before production billing.",
+    },
+    "azure_openai": {
+        "source": "https://azure.microsoft.com/pricing/details/azure-openai/",
+        "status": "region_sku_estimate",
+        "note": "Azure OpenAI pricing varies by region, deployment type, data zone and commercial agreement. Reconcile with Azure Pricing Calculator or Retail Prices API.",
+    },
+    "databricks": {
+        "source": "https://docs.databricks.com/aws/en/resources/pricing",
+        "status": "dbu_estimate",
+        "note": "Databricks Foundation Model pricing is published as DBU per 1M tokens. USD estimates depend on the customer's DBU rate.",
     },
 }
 
@@ -77,6 +102,20 @@ def context_ratio(provider: str | None, model: str | None, input_tokens: int) ->
     return min(max(input_tokens / context_window, 0.0), 1.0)
 
 
+def pricing_metadata(provider: str | None) -> dict[str, Any]:
+    normalized_provider = normalize_provider(provider)
+    metadata = PRICING_METADATA.get(normalized_provider, {})
+    result: dict[str, Any] = {
+        "pricing_unit": "USD_per_1M_tokens",
+        "pricing_last_verified": PRICE_CATALOG_LAST_VERIFIED,
+    }
+    if metadata:
+        result["pricing_source"] = metadata["source"]
+        if metadata["status"] != "verified":
+            result["pricing_warning"] = metadata["note"]
+    return result
+
+
 def calculate_cost(
     provider: str | None,
     model: str | None,
@@ -95,6 +134,7 @@ def calculate_cost(
         "total_cost": 0.0,
         "model_tier": infer_model_tier(model, normalized_provider),
     }
+    result.update(pricing_metadata(normalized_provider))
 
     if not model_key:
         result["pricing_warning"] = (

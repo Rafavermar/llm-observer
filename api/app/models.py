@@ -76,6 +76,9 @@ class EventOut(BaseModel):
     model_tier: str
     hygiene_flags: list[str] = Field(default_factory=list)
     pricing_warning: str | None = None
+    pricing_source: str | None = None
+    pricing_unit: str | None = None
+    pricing_last_verified: str | None = None
     raw: dict[str, Any] = Field(default_factory=dict)
     created_at: str | None = None
 
