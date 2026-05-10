@@ -311,7 +311,7 @@ Seed request:
 
 ## 11. Pricing
 
-Prices are in `api/app/pricing.py` and are expressed per 1M tokens.
+Prices are in `api/app/pricing.py` and are expressed per 1M tokens. The current catalog is an operational estimate for the MVP, not a replacement for provider billing exports.
 
 Formula:
 
@@ -330,6 +330,15 @@ Included models:
 - Databricks: `dbrx-instruct`, `llama-3-70b`
 
 Unknown provider or model combinations do not crash. They return zero cost with a pricing warning in the enriched response.
+
+Pricing governance:
+
+- The catalog includes `pricing_source`, `pricing_unit` and `pricing_last_verified` metadata in API responses.
+- OpenAI model prices should be checked against the official OpenAI model/pricing docs.
+- Anthropic entries in this MVP include legacy aliases and must be verified against current Anthropic API pricing before production use.
+- Azure OpenAI pricing varies by deployment type, region, data zone and commercial agreement; use Azure Pricing Calculator or the Azure Retail Prices API for production-grade estimates.
+- Databricks Foundation Model pricing is published as DBU consumption; USD cost depends on the customer's DBU rate and should be reconciled with Databricks billing.
+- Production should add billing reconciliation jobs so estimated Observer cost and provider invoice totals can be compared.
 
 ## 12. Hygiene Rules
 

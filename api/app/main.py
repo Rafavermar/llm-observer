@@ -60,6 +60,8 @@ def enrich_event(payload: EventCreate | dict[str, Any]) -> dict[str, Any]:
 def _with_flags(event: dict[str, Any]) -> dict[str, Any]:
     enriched = dict(event)
     enriched["hygiene_flags"] = hygiene.event_hygiene_flags(enriched)
+    metadata = pricing.pricing_metadata(enriched.get("provider"))
+    enriched.update({key: value for key, value in metadata.items() if key not in enriched or enriched[key] is None})
     return enriched
 
 
@@ -92,6 +94,9 @@ def create_event(event: EventCreate) -> dict[str, Any]:
     enriched = enrich_event(event)
     stored = storage.insert_event(enriched)
     stored["pricing_warning"] = enriched.get("pricing_warning")
+    stored["pricing_source"] = enriched.get("pricing_source")
+    stored["pricing_unit"] = enriched.get("pricing_unit")
+    stored["pricing_last_verified"] = enriched.get("pricing_last_verified")
     return _with_flags(stored)
 
 

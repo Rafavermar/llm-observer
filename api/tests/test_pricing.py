@@ -43,6 +43,20 @@ def test_unknown_model_does_not_crash() -> None:
     assert "pricing_warning" in result
 
 
+def test_pricing_includes_source_metadata() -> None:
+    result = calculate_cost(
+        provider="openai",
+        model="gpt-4o-mini",
+        input_tokens=1000,
+        output_tokens=100,
+        cached_tokens=0,
+    )
+
+    assert result["pricing_unit"] == "USD_per_1M_tokens"
+    assert result["pricing_last_verified"]
+    assert result["pricing_source"].startswith("https://")
+
+
 def test_infers_premium_model_tier() -> None:
     assert infer_model_tier("openai/gpt-4o", "openai") == "premium"
     assert infer_model_tier("gpt-4o-mini", "openai") == "standard"
