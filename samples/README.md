@@ -28,6 +28,19 @@ Call a real model through LiteLLM Proxy:
 python samples/call_openai_via_litellm.py
 ```
 
+To use a LiteLLM virtual key instead of the master key:
+
+```bash
+LITELLM_VIRTUAL_KEY=sk-your-virtual-key python samples/call_openai_via_litellm.py
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:LITELLM_VIRTUAL_KEY="sk-your-virtual-key"
+python samples\call_openai_via_litellm.py
+```
+
 If the LiteLLM callback does not fire in your local image, use the direct fallback:
 
 ```bash

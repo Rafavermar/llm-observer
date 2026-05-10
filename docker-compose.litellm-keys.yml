@@ -1,0 +1,31 @@
+services:
+  litellm-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: litellm
+      POSTGRES_DB: litellm
+    ports:
+      - "5433:5432"
+    volumes:
+      - litellm-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm -d litellm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  litellm-proxy:
+    environment:
+      - DATABASE_URL=postgresql://litellm:litellm@litellm-db:5432/litellm
+    volumes:
+      - ./litellm/config.with-keys.yaml:/app/config.yaml:ro
+      - ./litellm/observer_callback.py:/app/observer_callback.py:ro
+    depends_on:
+      observer-api:
+        condition: service_started
+      litellm-db:
+        condition: service_healthy
+
+volumes:
+  litellm-db:

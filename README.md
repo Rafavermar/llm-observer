@@ -531,6 +531,13 @@ For company rollout guidance, see:
 docs/enterprise-implementation.md
 ```
 
+For a local LiteLLM virtual-key test with Postgres key management:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.litellm-keys.yml up --build
+python samples/request_virtual_key.py --user-id demo.user@company.com --try-litellm
+```
+
 ## Run Tests
 
 ```bash

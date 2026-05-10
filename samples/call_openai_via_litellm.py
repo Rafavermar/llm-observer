@@ -72,10 +72,16 @@ def main() -> None:
         help="Send a normalized Observer event directly after the LiteLLM call.",
     )
     args = parser.parse_args()
+    litellm_api_key = (
+        os.getenv("LITELLM_VIRTUAL_KEY")
+        or os.getenv("LITELLM_API_KEY")
+        or os.getenv("LITELLM_MASTER_KEY")
+        or "sk-litellm-master-key"
+    )
 
     client = OpenAI(
         base_url=os.getenv("LITELLM_BASE_URL", "http://localhost:4040/v1"),
-        api_key=os.getenv("LITELLM_MASTER_KEY", "sk-litellm-master-key"),
+        api_key=litellm_api_key,
     )
 
     started = time.perf_counter()
