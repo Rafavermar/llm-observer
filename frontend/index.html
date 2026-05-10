@@ -41,7 +41,8 @@
     }
 
     button,
-    input {
+    input,
+    select {
       font: inherit;
     }
 
@@ -74,7 +75,8 @@
       color: #ffd9de;
     }
 
-    input {
+    input,
+    select {
       min-height: 38px;
       width: 100%;
       border: 1px solid var(--line);
@@ -84,7 +86,13 @@
       padding: 0 11px;
     }
 
-    input:focus {
+    input[type="checkbox"] {
+      min-height: auto;
+      width: auto;
+    }
+
+    input:focus,
+    select:focus {
       border-color: var(--teal);
       box-shadow: 0 0 0 3px rgba(79, 199, 178, 0.12);
       outline: 0;
@@ -408,6 +416,26 @@
       color: var(--muted);
     }
 
+    .key-output {
+      min-height: 114px;
+      white-space: pre-wrap;
+    }
+
+    .mini-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .mini-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-top: 1px solid var(--line-soft);
+      padding-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
     .error {
       color: #ffc0c8;
     }
@@ -649,6 +677,34 @@ python samples/send_fake_event.py
 python samples/call_openai_via_litellm.py</pre>
             <p class="muted">Next production steps: Postgres, migrations, auth/RBAC, virtual keys, budgets, alerting, OTel ingestion, CI/CD and IaC.</p>
           </article>
+          <article class="card stack">
+            <h2>Identity & Virtual Keys</h2>
+            <div class="grid two">
+              <label>User
+                <input id="key-user-id" list="user-options" placeholder="demo.user@company.com">
+                <datalist id="user-options"></datalist>
+              </label>
+              <label>App
+                <input id="key-app" value="sample-app">
+              </label>
+              <label>Workflow
+                <input id="key-workflow" value="demo-call">
+              </label>
+              <label>Max budget USD
+                <input id="key-budget" type="number" min="0" step="0.01" value="5">
+              </label>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;font-weight:700">
+              <input id="key-try-litellm" type="checkbox">
+              Try LiteLLM key generation
+            </label>
+            <div class="actions" style="justify-content:flex-start">
+              <button id="sync-demo-users-btn">Sync demo users</button>
+              <button class="primary" id="issue-key-btn">Issue virtual key</button>
+            </div>
+            <pre class="key-output" id="virtual-key-output">No key issued in this browser session.</pre>
+            <div class="mini-list" id="virtual-key-list"></div>
+          </article>
         </div>
       </section>
 
@@ -674,6 +730,8 @@ python samples/call_openai_via_litellm.py</pre>
       developers: [],
       teams: [],
       issues: [],
+      users: [],
+      virtualKeys: [],
       charts: {}
     };
 
@@ -1059,6 +1117,18 @@ python samples/call_openai_via_litellm.py</pre>
 
     function renderSettings() {
       $("#api-base-input").value = state.apiBase;
+      $("#user-options").innerHTML = state.users.map((user) => `
+        <option value="${user.user_id}">${user.user_name || user.user_id} · ${user.team || "-"}</option>
+      `).join("");
+      if (!$("#key-user-id").value && state.users.length) {
+        $("#key-user-id").value = state.users[0].user_id;
+      }
+      $("#virtual-key-list").innerHTML = state.virtualKeys.slice(0, 5).map((key) => `
+        <div class="mini-row">
+          <span>${key.key_prefix} · ${key.user_id}</span>
+          <span>${key.source}</span>
+        </div>
+      `).join("") || `<div class="muted">No virtual keys yet.</div>`;
     }
 
     function renderAll() {
@@ -1101,18 +1171,22 @@ python samples/call_openai_via_litellm.py</pre>
     async function loadData() {
       setMessage("Loading...");
       try {
-        const [summary, eventsResponse, developers, teams, issues] = await Promise.all([
+        const [summary, eventsResponse, developers, teams, issues, users, virtualKeys] = await Promise.all([
           api("/api/summary"),
           api(`/api/events?${currentEventQuery()}`),
           api("/api/developers"),
           api("/api/teams"),
-          api("/api/hygiene/issues")
+          api("/api/hygiene/issues"),
+          api("/api/users"),
+          api("/api/virtual-keys")
         ]);
         state.summary = summary;
         state.events = eventsResponse.items || [];
         state.developers = developers;
         state.teams = teams;
         state.issues = issues;
+        state.users = users;
+        state.virtualKeys = virtualKeys;
         renderAll();
         setMessage(`Connected to ${state.apiBase}. Showing ${eventsResponse.count || 0} matching events.`);
       } catch (error) {
@@ -1198,6 +1272,54 @@ python samples/call_openai_via_litellm.py</pre>
       loadData();
     }
 
+    async function syncDemoUsers() {
+      const output = $("#virtual-key-output");
+      output.textContent = "Syncing demo users...";
+      try {
+        const result = await api("/api/users/sync/demo", {method: "POST"});
+        output.textContent = `Synced ${result.synced} demo users.`;
+        await loadData();
+      } catch (error) {
+        output.textContent = error.message;
+      }
+    }
+
+    async function issueVirtualKey() {
+      const output = $("#virtual-key-output");
+      output.textContent = "Issuing virtual key...";
+      const budget = Number($("#key-budget").value);
+      const payload = {
+        user_id: $("#key-user-id").value.trim(),
+        app: $("#key-app").value.trim() || "sample-app",
+        workflow: $("#key-workflow").value.trim() || "demo-call",
+        provider: "openai",
+        models: ["gpt-4o-mini"],
+        max_budget_usd: Number.isFinite(budget) ? budget : null,
+        budget_duration: "30d",
+        try_litellm: $("#key-try-litellm").checked
+      };
+
+      try {
+        const result = await api("/api/virtual-keys", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+        output.textContent = [
+          "Store this key securely. It is only returned once.",
+          "",
+          result.key,
+          "",
+          `Source: ${result.source}`,
+          `User: ${result.user_id}`,
+          `Team: ${result.team || "-"}`,
+          result.litellm_error ? `LiteLLM: ${result.litellm_error}` : ""
+        ].filter(Boolean).join("\n");
+        await loadData();
+      } catch (error) {
+        output.textContent = error.message;
+      }
+    }
+
     window.addEventListener("hashchange", renderRoute);
     $("#refresh-btn").addEventListener("click", loadData);
     $("#seed-btn").addEventListener("click", seedDemoData);
@@ -1207,6 +1329,8 @@ python samples/call_openai_via_litellm.py</pre>
     $("#save-api-base-btn").addEventListener("click", saveApiBase);
     $("#test-api-btn").addEventListener("click", testConnection);
     $("#manual-event-btn").addEventListener("click", sendManualEvent);
+    $("#sync-demo-users-btn").addEventListener("click", syncDemoUsers);
+    $("#issue-key-btn").addEventListener("click", issueVirtualKey);
     ["#filter-user", "#filter-team", "#filter-provider", "#filter-model"].forEach((selector) => {
       $(selector).addEventListener("keydown", (event) => {
         if (event.key === "Enter") loadData();

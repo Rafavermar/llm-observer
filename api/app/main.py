@@ -5,13 +5,16 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import aggregations, hygiene, pricing, seed, storage
+from . import aggregations, hygiene, identity, pricing, seed, storage
 from .config import get_settings
 from .models import (
     DeveloperRow,
+    DirectoryUserOut,
+    UserSyncRequest,
+    UserSyncResponse,
     EventCreate,
     EventOut,
     EventsResponse,
@@ -19,6 +22,9 @@ from .models import (
     SeedRequest,
     SummaryResponse,
     TeamRow,
+    VirtualKeyCreate,
+    VirtualKeyIssued,
+    VirtualKeyOut,
 )
 
 
@@ -156,4 +162,73 @@ def seed_demo_data(request: SeedRequest | None = None) -> dict[str, Any]:
 def clear_demo_data() -> dict[str, Any]:
     deleted = storage.clear_events()
     return {"deleted": deleted}
+
+
+@app.get("/api/users", response_model=list[DirectoryUserOut])
+def get_users(
+    active: bool | None = None,
+    query: str | None = None,
+) -> list[dict[str, Any]]:
+    return storage.list_users(active=active, query=query)
+
+
+@app.post("/api/users/sync", response_model=UserSyncResponse)
+def sync_users(request: UserSyncRequest) -> dict[str, Any]:
+    users = [user.model_dump() for user in request.users]
+    synced = storage.upsert_users(users, source=request.source)
+    return {"synced": len(synced), "users": synced}
+
+
+@app.post("/api/users/sync/demo", response_model=UserSyncResponse)
+def sync_demo_users() -> dict[str, Any]:
+    synced = storage.sync_demo_users()
+    return {"synced": len(synced), "users": synced}
+
+
+@app.get("/api/virtual-keys", response_model=list[VirtualKeyOut])
+def get_virtual_keys(
+    user_id: str | None = None,
+    status: str | None = None,
+) -> list[dict[str, Any]]:
+    return storage.list_virtual_keys(user_id=user_id, status=status)
+
+
+@app.post("/api/virtual-keys", response_model=VirtualKeyIssued)
+async def issue_virtual_key(request: VirtualKeyCreate) -> dict[str, Any]:
+    user = storage.get_user(request.user_id)
+    if not user or not user.get("active"):
+        raise HTTPException(status_code=404, detail="Sync an active user before issuing a virtual key")
+
+    settings = get_settings()
+    litellm_payload = identity.build_litellm_generate_payload(request, user)
+    litellm_curl = identity.build_litellm_generate_curl(litellm_payload, settings)
+    litellm_result = None
+    litellm_error = None
+    source = "observer_local"
+    key = identity.generate_observer_key()
+
+    if request.try_litellm:
+        litellm_result, litellm_key, litellm_error = await identity.try_generate_litellm_key(
+            litellm_payload,
+            settings,
+        )
+        if litellm_key:
+            key = litellm_key
+            source = "litellm"
+
+    record = identity.build_virtual_key_record(
+        key=key,
+        request=request,
+        user=user,
+        source=source,
+    )
+    stored = storage.insert_virtual_key(record)
+    return {
+        **stored,
+        "key": key,
+        "litellm_generate_payload": litellm_payload,
+        "litellm_generate_curl": litellm_curl,
+        "litellm_result": litellm_result,
+        "litellm_error": litellm_error,
+    }
 

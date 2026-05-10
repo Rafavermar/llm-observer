@@ -195,7 +195,60 @@ http://observer-api:8080/api/events
 
 Reference for the custom callback pattern: https://docs.litellm.ai/docs/proxy/logging
 
-## 9. View Events In Dashboard
+## 9. Sync Users And Issue Virtual Keys
+
+The demo event flow still works without a user directory. For production-style ownership, sync users first and then issue keys against those users.
+
+Sync the bundled sample users:
+
+```bash
+python samples/sync_users.py
+```
+
+Or call the API directly:
+
+```bash
+curl -X POST http://localhost:8080/api/users/sync/demo
+```
+
+List synced users:
+
+```bash
+curl http://localhost:8080/api/users
+```
+
+Request a local Observer virtual key for a synced user:
+
+```bash
+python samples/request_virtual_key.py --user-id demo.user@company.com
+```
+
+The response returns the key only once. Observer stores only a hash and a short prefix.
+
+Current behavior:
+
+- `source=observer_local`: local development key, useful to model ownership and future budgets inside Observer.
+- `source=litellm`: real LiteLLM key, only when `--try-litellm` succeeds.
+
+Real LiteLLM virtual-key generation requires LiteLLM key management with a Postgres `DATABASE_URL`, then `/key/generate` with the `LITELLM_MASTER_KEY`. The Observer response includes the exact LiteLLM payload and cURL shape so the flow is ready for the Postgres iteration.
+
+Try real LiteLLM key generation once LiteLLM has Postgres configured:
+
+```bash
+python samples/request_virtual_key.py --user-id demo.user@company.com --try-litellm
+```
+
+Useful endpoints:
+
+- `GET /api/users`
+- `POST /api/users/sync`
+- `POST /api/users/sync/demo`
+- `GET /api/virtual-keys`
+- `POST /api/virtual-keys`
+
+LiteLLM reference: https://docs.litellm.ai/docs/proxy/virtual_keys
+
+## 10. View Events In Dashboard
 
 Open:
 
@@ -220,7 +273,7 @@ http://localhost:8080
 
 You can change the API base in Settings. The value is stored in browser `localStorage`.
 
-## 10. API Contract
+## 11. API Contract
 
 ### GET /health
 
@@ -298,6 +351,11 @@ Response:
 - `GET /api/developers`
 - `GET /api/teams`
 - `GET /api/hygiene/issues`
+- `GET /api/users`
+- `POST /api/users/sync`
+- `POST /api/users/sync/demo`
+- `GET /api/virtual-keys`
+- `POST /api/virtual-keys`
 - `POST /api/demo/seed`
 - `POST /api/demo/clear`
 
@@ -309,7 +367,7 @@ Seed request:
 }
 ```
 
-## 11. Pricing
+## 12. Pricing
 
 Prices are in `api/app/pricing.py` and are expressed per 1M tokens. The current catalog is an operational estimate for the MVP, not a replacement for provider billing exports.
 
@@ -340,7 +398,7 @@ Pricing governance:
 - Databricks Foundation Model pricing is published as DBU consumption; USD cost depends on the customer's DBU rate and should be reconciled with Databricks billing.
 - Production should add billing reconciliation jobs so estimated Observer cost and provider invoice totals can be compared.
 
-## 12. Hygiene Rules
+## 13. Hygiene Rules
 
 Company score starts at `100`.
 
@@ -364,7 +422,7 @@ Active issue rules:
 
 Demo seed data intentionally generates enough usage to show `H01`, `H02`, `H03`, `H05` and `H08`.
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 ### LiteLLM starts but model call fails
 
@@ -448,14 +506,18 @@ python samples/call_openai_via_litellm.py --also-send-observer-event
 
 This still proves the first milestone: real usage, token accounting, calculated cost and dashboard visibility.
 
-## 14. Evolve To Production
+### LiteLLM virtual-key generation fails
+
+Observer can issue local development keys without LiteLLM key management. Real LiteLLM virtual keys need a Postgres-backed LiteLLM Proxy with `DATABASE_URL` configured. Until then, use the local key response and the generated LiteLLM payload as the implementation contract for the next iteration.
+
+## 15. Evolve To Production
 
 Recommended next iterations:
 
 - Replace SQLite with Postgres.
 - Add Alembic migrations.
 - Add auth/RBAC.
-- Add LiteLLM virtual keys per user/team/app.
+- Promote local virtual keys to real LiteLLM virtual keys per user/team/app.
 - Add budgets and quota policies.
 - Add alerting for cost spikes and hygiene regressions.
 - Add OpenTelemetry ingestion.

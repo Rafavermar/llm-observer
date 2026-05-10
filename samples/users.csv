@@ -1,0 +1,7 @@
+user_id,user_name,email,role,team,department,active
+demo.user@company.com,Demo User,demo.user@company.com,developer,data-platform,engineering,true
+context.bloat@company.com,Casey Context,context.bloat@company.com,developer,agent-platform,engineering,true
+no.cache@company.com,Nora Cache,no.cache@company.com,developer,data-platform,engineering,true
+premium.overuse@company.com,Priya Premium,premium.overuse@company.com,developer,growth-ai,product,true
+flaky.retries@company.com,Finn Retry,flaky.retries@company.com,developer,support-ops,operations,true
+huge.context@company.com,Harper Huge,huge.context@company.com,developer,legal-ai,legal,true

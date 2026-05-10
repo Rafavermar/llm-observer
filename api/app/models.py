@@ -138,3 +138,116 @@ class SeedRequest(BaseModel):
     count: int = Field(default=500, ge=1, le=10_000)
     seed: int | None = None
 
+
+class DirectoryUserIn(BaseModel):
+    user_id: str = Field(min_length=3, max_length=320)
+    user_name: str | None = Field(default=None, max_length=200)
+    email: str | None = Field(default=None, max_length=320)
+    role: str = Field(default="developer", max_length=100)
+    team: str | None = Field(default=None, max_length=120)
+    department: str | None = Field(default=None, max_length=120)
+    active: bool = True
+
+    @field_validator("user_id", "role")
+    @classmethod
+    def trim_required_user_strings(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("value must not be blank")
+        return trimmed
+
+    @field_validator("user_name", "email", "team", "department")
+    @classmethod
+    def trim_optional_strings(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
+
+class UserSyncRequest(BaseModel):
+    source: str = Field(default="manual", min_length=1, max_length=80)
+    users: list[DirectoryUserIn] = Field(min_length=1, max_length=10_000)
+
+
+class DirectoryUserOut(BaseModel):
+    user_id: str
+    user_name: str | None = None
+    email: str | None = None
+    role: str
+    team: str | None = None
+    department: str | None = None
+    source: str
+    active: bool
+    created_at: str
+    updated_at: str
+
+
+class UserSyncResponse(BaseModel):
+    synced: int
+    users: list[DirectoryUserOut]
+
+
+class VirtualKeyCreate(BaseModel):
+    user_id: str = Field(min_length=3, max_length=320)
+    app: str = Field(default="sample-app", max_length=120)
+    workflow: str = Field(default="demo-call", max_length=120)
+    provider: str = Field(default="openai", max_length=80)
+    models: list[str] = Field(default_factory=lambda: ["gpt-4o-mini"], min_length=1, max_length=20)
+    max_budget_usd: float | None = Field(default=None, ge=0)
+    budget_duration: str | None = Field(default="30d", max_length=40)
+    expires_at: datetime | None = None
+    try_litellm: bool = False
+
+    @field_validator("user_id", "app", "workflow", "provider")
+    @classmethod
+    def trim_required_key_strings(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("value must not be blank")
+        return trimmed
+
+    @field_validator("budget_duration")
+    @classmethod
+    def trim_optional_key_strings(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
+    @field_validator("models")
+    @classmethod
+    def trim_models(cls, values: list[str]) -> list[str]:
+        cleaned = [value.strip() for value in values if value and value.strip()]
+        if not cleaned:
+            raise ValueError("models must include at least one model")
+        return cleaned
+
+
+class VirtualKeyOut(BaseModel):
+    id: str
+    key_prefix: str
+    user_id: str
+    user_name: str | None = None
+    team: str | None = None
+    department: str | None = None
+    app: str
+    workflow: str
+    provider: str
+    models: list[str]
+    max_budget_usd: float | None = None
+    budget_duration: str | None = None
+    status: str
+    source: str
+    created_at: str
+    expires_at: str | None = None
+    last_used_at: str | None = None
+
+
+class VirtualKeyIssued(VirtualKeyOut):
+    key: str
+    litellm_generate_payload: dict[str, Any]
+    litellm_generate_curl: str
+    litellm_result: dict[str, Any] | None = None
+    litellm_error: str | None = None
+
