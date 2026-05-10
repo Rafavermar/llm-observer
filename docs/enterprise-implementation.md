@@ -222,7 +222,14 @@ POST /api/users/sync
 
 ## Virtual Keys
 
-Current MVP supports local Observer key issuance:
+There are two practical paths:
+
+- **Observer local key**: works in the Tiny MVP without LiteLLM Postgres. Good for modeling identity and future budgets.
+- **LiteLLM real virtual key**: accepted by the LiteLLM gateway. Requires LiteLLM key management with Postgres.
+
+### Path A: Local Observer Key
+
+Use this first if you only want to validate the Observer ownership model.
 
 ```bash
 python samples/request_virtual_key.py --user-id demo.user@company.com
@@ -230,7 +237,53 @@ python samples/request_virtual_key.py --user-id demo.user@company.com
 
 Observer returns the key once and stores only a hash plus prefix.
 
-Real LiteLLM virtual keys require LiteLLM key management backed by Postgres. Then Observer can call LiteLLM `/key/generate` with the master key.
+This key is not yet accepted by LiteLLM. It is useful for proving the product model:
+
+```text
+synced user
+  -> virtual key metadata
+  -> future budget/model policy
+  -> dashboard ownership
+```
+
+### Path B: Real LiteLLM Virtual Key
+
+Use this when you want an app to call LiteLLM with a virtual key instead of the master key.
+
+LiteLLM requires Postgres for key management. This repo includes a local override file to make that test low-friction:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.litellm-keys.yml up --build
+```
+
+This starts:
+
+```text
+observer-api
+observer-frontend
+litellm-proxy
+litellm-db
+```
+
+The override file gives LiteLLM:
+
+```text
+DATABASE_URL=postgresql://litellm:litellm@litellm-db:5432/litellm
+```
+
+and mounts:
+
+```text
+litellm/config.with-keys.yaml
+```
+
+That config uses LiteLLM's documented key-management settings:
+
+```yaml
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+```
 
 Required LiteLLM settings:
 
@@ -239,10 +292,160 @@ DATABASE_URL=postgresql://...
 LITELLM_MASTER_KEY=sk-...
 ```
 
-Try the real handoff after Postgres is configured:
+### Step-By-Step Local Virtual Key Test
+
+1. Copy env and add a provider key.
+
+```bash
+cp .env.example .env
+```
+
+Set:
+
+```text
+OPENAI_API_KEY=your-provider-key
+LITELLM_MASTER_KEY=sk-litellm-master-key
+```
+
+2. Start the Postgres-backed LiteLLM key-management stack.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.litellm-keys.yml up --build
+```
+
+3. Sync demo users into Observer.
+
+```bash
+python samples/sync_users.py
+```
+
+4. Ask Observer to request a real LiteLLM virtual key.
 
 ```bash
 python samples/request_virtual_key.py --user-id demo.user@company.com --try-litellm
+```
+
+Expected output:
+
+```text
+Virtual key issued. Store it securely; Observer only returns it once.
+key: sk-...
+source: litellm
+user: demo.user@company.com
+team: data-platform
+```
+
+If `source` is `observer_local`, LiteLLM did not generate the key. Read the `LiteLLM note` line printed by the script.
+
+5. Test the key against LiteLLM.
+
+PowerShell:
+
+```powershell
+$env:LITELLM_VIRTUAL_KEY="sk-returned-by-request-virtual-key"
+python samples\call_openai_via_litellm.py
+```
+
+The sample uses `LITELLM_VIRTUAL_KEY` first, then `LITELLM_API_KEY`, then `LITELLM_MASTER_KEY`.
+
+Or use cURL:
+
+```bash
+curl http://localhost:4040/v1/chat/completions \
+  -H "Authorization: Bearer sk-returned-by-request-virtual-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4o-mini",
+    "messages": [
+      {"role": "user", "content": "Say hello in one short sentence."}
+    ],
+    "metadata": {
+      "user_id": "demo.user@company.com",
+      "team": "data-platform",
+      "department": "engineering",
+      "app": "sample-app",
+      "workflow": "virtual-key-smoke-test"
+    }
+  }'
+```
+
+6. Verify Observer.
+
+Open:
+
+```text
+http://localhost:3000/#events
+```
+
+You should see an event with:
+
+```text
+source=litellm
+user/team/app/workflow metadata
+provider/model
+tokens
+cost
+```
+
+### Direct LiteLLM Key Creation
+
+If you want to bypass Observer and prove LiteLLM itself first:
+
+```bash
+curl -X POST http://localhost:4040/key/generate \
+  -H "Authorization: Bearer sk-litellm-master-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "models": ["gpt-4o-mini"],
+    "user_id": "demo.user@company.com",
+    "metadata": {
+      "team": "data-platform",
+      "department": "engineering",
+      "app": "sample-app",
+      "workflow": "manual-key-test"
+    },
+    "max_budget": 5,
+    "budget_duration": "30d"
+  }'
+```
+
+Then use the returned `sk-...` as the API key against:
+
+```text
+http://localhost:4040/v1
+```
+
+### Practical Troubleshooting
+
+If `/key/generate` returns unauthorized:
+
+```text
+Check LITELLM_MASTER_KEY.
+It must match the Authorization Bearer token.
+It should start with sk-.
+```
+
+If `/key/generate` fails with database errors:
+
+```text
+Check that litellm-db is healthy.
+Check DATABASE_URL.
+Start with docker-compose.litellm-keys.yml.
+```
+
+If the key is generated but model calls fail:
+
+```text
+Check OPENAI_API_KEY or the provider key for the selected model.
+Check that the generated key allows model gpt-4o-mini.
+```
+
+If the LLM call works but Observer does not show an event:
+
+```text
+Check litellm-proxy logs.
+Check OBSERVER_API_URL=http://observer-api:8080 inside Docker.
+Use samples/call_openai_via_litellm.py --also-send-observer-event as fallback.
 ```
 
 LiteLLM virtual keys can carry ownership metadata and, in later iterations, budgets, model restrictions and rate limits.

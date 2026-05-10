@@ -49,5 +49,19 @@ POST /api/virtual-keys
 
 Real LiteLLM virtual keys require LiteLLM key management with a Postgres `DATABASE_URL`, then `/key/generate` authenticated with `LITELLM_MASTER_KEY`.
 
+Local low-friction test:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.litellm-keys.yml up --build
+python samples/sync_users.py
+python samples/request_virtual_key.py --user-id demo.user@company.com --try-litellm
+```
+
+The override compose file starts a local `litellm-db` Postgres service and mounts:
+
+```text
+litellm/config.with-keys.yaml
+```
+
 Reference: https://docs.litellm.ai/docs/proxy/virtual_keys
 
