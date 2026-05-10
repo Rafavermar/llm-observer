@@ -62,3 +62,15 @@ def test_get_summary(client: TestClient) -> None:
     assert body["active_users"] == 1
     assert 0 <= body["hygiene_score"] <= 100
 
+
+def test_get_events_uses_partial_case_insensitive_filters(client: TestClient) -> None:
+    payload = _payload()
+    client.post("/api/events", json=payload)
+
+    response = client.get("/api/events", params={"user_id": "demo user", "team": "platform"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 1
+    assert body["items"][0]["user_id"] == payload["user_id"]
+

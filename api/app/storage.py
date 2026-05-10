@@ -142,6 +142,32 @@ def insert_event(event: dict[str, Any], db_path: str | None = None) -> dict[str,
     return _row_to_event(row)
 
 
+def _like_pattern(value: str) -> str:
+    escaped = (
+        value.strip()
+        .lower()
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+    return f"%{escaped}%"
+
+
+def _append_like_filter(
+    where: list[str],
+    params: list[Any],
+    columns: list[str],
+    value: str | None,
+) -> None:
+    if not value or not value.strip():
+        return
+
+    pattern = _like_pattern(value)
+    clauses = [f"LOWER(COALESCE({column}, '')) LIKE ? ESCAPE '\\'" for column in columns]
+    where.append(f"({' OR '.join(clauses)})")
+    params.extend([pattern] * len(columns))
+
+
 def list_events(
     *,
     limit: int = 100,
@@ -159,15 +185,11 @@ def list_events(
     if since:
         where.append("ts >= ?")
         params.append(since)
-    for column, value in {
-        "user_id": user_id,
-        "team": team,
-        "provider": provider,
-        "model": model,
-    }.items():
-        if value:
-            where.append(f"{column} = ?")
-            params.append(value)
+
+    _append_like_filter(where, params, ["user_id", "user_name"], user_id)
+    _append_like_filter(where, params, ["team"], team)
+    _append_like_filter(where, params, ["provider"], provider)
+    _append_like_filter(where, params, ["model"], model)
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     safe_limit = min(max(limit, 1), 5000)

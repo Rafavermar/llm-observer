@@ -8,18 +8,22 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #0d0f14;
-      --panel: #151922;
-      --panel-soft: #1d2430;
-      --line: #2a3342;
-      --text: #eef2f7;
-      --muted: #98a4b5;
-      --green: #35d49f;
-      --teal: #3fbfd0;
-      --amber: #f2bd57;
-      --red: #f06f7f;
-      --violet: #a78bfa;
-      --blue: #6ea8fe;
+      --bg: #101211;
+      --panel: #171b19;
+      --panel-soft: #202722;
+      --panel-strong: #111513;
+      --line: #2d3832;
+      --line-soft: #223029;
+      --text: #eef4ef;
+      --muted: #9ba8a0;
+      --green: #43d18f;
+      --teal: #4fc7b2;
+      --amber: #e8b85d;
+      --red: #ee7781;
+      --violet: #b8a4ff;
+      --blue: #7db7ff;
+      --coral: #ff9a76;
+      --sage: #9fca8d;
       --radius: 8px;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
@@ -31,7 +35,8 @@
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background:
+        linear-gradient(180deg, #151813 0%, var(--bg) 34%, #0d0f0e 100%);
       color: var(--text);
     }
 
@@ -53,12 +58,13 @@
 
     button:hover {
       border-color: var(--teal);
+      background: #263028;
       transform: translateY(-1px);
     }
 
     button.primary {
       border-color: transparent;
-      background: var(--teal);
+      background: linear-gradient(180deg, #69d8c6 0%, var(--teal) 100%);
       color: #071014;
       font-weight: 700;
     }
@@ -73,9 +79,19 @@
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 7px;
-      background: #0f131b;
+      background: #101512;
       color: var(--text);
       padding: 0 11px;
+    }
+
+    input:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(79, 199, 178, 0.12);
+      outline: 0;
+    }
+
+    input::placeholder {
+      color: #6f7d73;
     }
 
     label {
@@ -114,7 +130,7 @@
       top: 0;
       height: 100vh;
       border-right: 1px solid var(--line);
-      background: #10141c;
+      background: var(--panel-strong);
       padding: 22px 16px;
     }
 
@@ -148,7 +164,7 @@
 
     .nav a.active,
     .nav a:hover {
-      background: var(--panel-soft);
+      background: #1d241f;
       color: var(--text);
     }
 
@@ -224,9 +240,10 @@
     .card {
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      background: var(--panel);
+      background: linear-gradient(180deg, #1a201c 0%, var(--panel) 100%);
       padding: 16px;
       min-width: 0;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16);
     }
 
     .kpi {
@@ -251,9 +268,13 @@
 
     .toolbar {
       display: grid;
-      grid-template-columns: repeat(4, minmax(140px, 1fr)) auto;
+      grid-template-columns: repeat(4, minmax(140px, 1fr)) auto auto;
       gap: 10px;
       align-items: end;
+    }
+
+    .chart-card {
+      min-height: 380px;
     }
 
     .table-wrap {
@@ -283,11 +304,15 @@
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0;
-      background: #111720;
+      background: var(--panel-strong);
     }
 
     tr:last-child td {
       border-bottom: 0;
+    }
+
+    tbody tr:hover td {
+      background: rgba(79, 199, 178, 0.035);
     }
 
     .status {
@@ -368,7 +393,8 @@
     }
 
     canvas {
-      max-height: 330px;
+      height: 300px !important;
+      max-height: 300px;
     }
 
     @media (max-width: 1040px) {
@@ -452,11 +478,11 @@
       <section class="section" id="overview">
         <div class="grid kpis" id="kpi-grid"></div>
         <div class="grid two">
-          <article class="card">
+          <article class="card chart-card">
             <h2>Daily Cost By Provider</h2>
             <canvas id="cost-chart"></canvas>
           </article>
-          <article class="card">
+          <article class="card chart-card">
             <h2>Token Split</h2>
             <canvas id="token-chart"></canvas>
           </article>
@@ -467,18 +493,19 @@
         <div class="card">
           <div class="toolbar">
             <label>User
-              <input id="filter-user" placeholder="demo.user@company.com">
+              <input id="filter-user" placeholder="name or email">
             </label>
             <label>Team
-              <input id="filter-team" placeholder="data-platform">
+              <input id="filter-team" placeholder="platform">
             </label>
             <label>Provider
               <input id="filter-provider" placeholder="openai">
             </label>
             <label>Model
-              <input id="filter-model" placeholder="gpt-4o-mini">
+              <input id="filter-model" placeholder="4o-mini">
             </label>
             <button class="primary" id="apply-filters-btn">Apply</button>
+            <button id="clear-filters-btn">Clear</button>
           </div>
         </div>
         <div class="table-wrap">
@@ -566,8 +593,8 @@
       <section class="section" id="settings">
         <div class="grid two">
           <article class="card stack">
-            <h2>API Base URL</h2>
-            <label>Dashboard API base
+            <h2>Observer API URL</h2>
+            <label>Dashboard reads from
               <input id="api-base-input">
             </label>
             <div class="actions" style="justify-content:flex-start">
@@ -621,6 +648,14 @@ python samples/call_openai_via_litellm.py</pre>
     };
 
     const $ = (selector) => document.querySelector(selector);
+    const chartPalette = ["#4fc7b2", "#e8b85d", "#b8a4ff", "#9fca8d", "#ff9a76", "#7db7ff"];
+    const chartGrid = "rgba(238, 244, 239, 0.08)";
+    const chartText = "#9ba8a0";
+
+    if (window.Chart) {
+      Chart.defaults.color = chartText;
+      Chart.defaults.font.family = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+    }
 
     function fmtNumber(value) {
       return new Intl.NumberFormat("en-US").format(value || 0);
@@ -720,11 +755,13 @@ python samples/call_openai_via_litellm.py</pre>
       });
 
       const labels = Array.from(grouped.keys()).sort();
-      const palette = ["#3fbfd0", "#f2bd57", "#a78bfa", "#35d49f", "#f06f7f", "#6ea8fe"];
       const datasets = Array.from(providers).sort().map((provider, index) => ({
         label: provider,
         data: labels.map((label) => grouped.get(label)[provider] || 0),
-        backgroundColor: palette[index % palette.length]
+        backgroundColor: chartPalette[index % chartPalette.length],
+        borderRadius: 5,
+        borderSkipped: false,
+        maxBarThickness: 34
       }));
 
       state.charts.cost = new Chart($("#cost-chart"), {
@@ -733,8 +770,35 @@ python samples/call_openai_via_litellm.py</pre>
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          scales: {x: {stacked: true}, y: {stacked: true}},
-          plugins: {legend: {labels: {color: "#eef2f7"}}}
+          scales: {
+            x: {
+              stacked: true,
+              grid: {display: false},
+              ticks: {color: chartText, maxRotation: 0, autoSkipPadding: 16}
+            },
+            y: {
+              stacked: true,
+              grid: {color: chartGrid},
+              ticks: {
+                color: chartText,
+                callback: (value) => fmtMoney(value)
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: {boxWidth: 10, boxHeight: 10, usePointStyle: true}
+            },
+            tooltip: {
+              backgroundColor: "#101512",
+              borderColor: "#2d3832",
+              borderWidth: 1,
+              callbacks: {
+                label: (context) => `${context.dataset.label}: ${fmtMoney(context.parsed.y)}`
+              }
+            }
+          }
         }
       });
     }
@@ -751,14 +815,30 @@ python samples/call_openai_via_litellm.py</pre>
           labels: ["Input", "Cached", "Output"],
           datasets: [{
             data: [input, cached, output],
-            backgroundColor: ["#3fbfd0", "#35d49f", "#f2bd57"],
-            borderColor: "#151922"
+            backgroundColor: ["#4fc7b2", "#43d18f", "#e8b85d"],
+            borderColor: "#171b19",
+            borderWidth: 3,
+            hoverOffset: 6
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: {legend: {labels: {color: "#eef2f7"}}}
+          cutout: "64%",
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: {boxWidth: 10, boxHeight: 10, usePointStyle: true}
+            },
+            tooltip: {
+              backgroundColor: "#101512",
+              borderColor: "#2d3832",
+              borderWidth: 1,
+              callbacks: {
+                label: (context) => `${context.label}: ${fmtNumber(context.parsed)} tokens`
+              }
+            }
+          }
         }
       });
     }
@@ -868,6 +948,13 @@ python samples/call_openai_via_litellm.py</pre>
       return params.toString();
     }
 
+    function clearFilters() {
+      ["#filter-user", "#filter-team", "#filter-provider", "#filter-model"].forEach((selector) => {
+        $(selector).value = "";
+      });
+      loadData();
+    }
+
     async function loadData() {
       setMessage("Loading...");
       try {
@@ -936,6 +1023,7 @@ python samples/call_openai_via_litellm.py</pre>
       };
 
       const settingsMessage = $("#settings-message");
+      settingsMessage.classList.remove("error");
       settingsMessage.textContent = "Sending fake event...";
       try {
         await api("/api/events", {method: "POST", body: JSON.stringify(payload)});
@@ -972,9 +1060,15 @@ python samples/call_openai_via_litellm.py</pre>
     $("#seed-btn").addEventListener("click", seedDemoData);
     $("#clear-btn").addEventListener("click", clearEvents);
     $("#apply-filters-btn").addEventListener("click", loadData);
+    $("#clear-filters-btn").addEventListener("click", clearFilters);
     $("#save-api-base-btn").addEventListener("click", saveApiBase);
     $("#test-api-btn").addEventListener("click", testConnection);
     $("#manual-event-btn").addEventListener("click", sendManualEvent);
+    ["#filter-user", "#filter-team", "#filter-provider", "#filter-model"].forEach((selector) => {
+      $(selector).addEventListener("keydown", (event) => {
+        if (event.key === "Enter") loadData();
+      });
+    });
 
     if (!window.location.hash) {
       window.location.hash = "#overview";
