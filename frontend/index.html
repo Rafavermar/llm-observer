@@ -350,6 +350,26 @@
       align-items: center;
     }
 
+    .issue-title {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-bottom: 5px;
+    }
+
+    .rule-tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 0 8px;
+    }
+
     .badge {
       display: inline-flex;
       align-items: center;
@@ -479,12 +499,22 @@
         <div class="grid kpis" id="kpi-grid"></div>
         <div class="grid two">
           <article class="card chart-card">
-            <h2>Daily Cost By Provider</h2>
+            <h2>Daily Cost by Provider</h2>
             <canvas id="cost-chart"></canvas>
           </article>
           <article class="card chart-card">
             <h2>Token Split</h2>
             <canvas id="token-chart"></canvas>
+          </article>
+        </div>
+        <div class="grid two">
+          <article class="card chart-card">
+            <h2>Team Spend</h2>
+            <canvas id="team-cost-chart"></canvas>
+          </article>
+          <article class="card chart-card">
+            <h2>Hygiene Issue Severity</h2>
+            <canvas id="issue-severity-chart"></canvas>
           </article>
         </div>
       </section>
@@ -648,7 +678,12 @@ python samples/call_openai_via_litellm.py</pre>
     };
 
     const $ = (selector) => document.querySelector(selector);
-    const chartPalette = ["#4fc7b2", "#e8b85d", "#b8a4ff", "#9fca8d", "#ff9a76", "#7db7ff"];
+    const chartPalette = ["#7fb7a2", "#c6aa6c", "#8ea3c8", "#b48c9b", "#9fbf86", "#c58b71"];
+    const severityPalette = {
+      critical: "#d98785",
+      warning: "#d7b36a",
+      info: "#85a9c9"
+    };
     const chartGrid = "rgba(238, 244, 239, 0.08)";
     const chartText = "#9ba8a0";
 
@@ -742,6 +777,25 @@ python samples/call_openai_via_litellm.py</pre>
       }
     }
 
+    function baseChartOptions(extra = {}) {
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: {boxWidth: 10, boxHeight: 10, usePointStyle: true}
+          },
+          tooltip: {
+            backgroundColor: "#101512",
+            borderColor: "#2d3832",
+            borderWidth: 1
+          }
+        },
+        ...extra
+      };
+    }
+
     function renderCostChart() {
       destroyChart("cost");
       const grouped = new Map();
@@ -767,9 +821,7 @@ python samples/call_openai_via_litellm.py</pre>
       state.charts.cost = new Chart($("#cost-chart"), {
         type: "bar",
         data: {labels, datasets},
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
+        options: baseChartOptions({
           scales: {
             x: {
               stacked: true,
@@ -786,6 +838,7 @@ python samples/call_openai_via_litellm.py</pre>
             }
           },
           plugins: {
+            ...baseChartOptions().plugins,
             legend: {
               position: "bottom",
               labels: {boxWidth: 10, boxHeight: 10, usePointStyle: true}
@@ -799,7 +852,7 @@ python samples/call_openai_via_litellm.py</pre>
               }
             }
           }
-        }
+        })
       });
     }
 
@@ -821,11 +874,10 @@ python samples/call_openai_via_litellm.py</pre>
             hoverOffset: 6
           }]
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
+        options: baseChartOptions({
           cutout: "64%",
           plugins: {
+            ...baseChartOptions().plugins,
             legend: {
               position: "bottom",
               labels: {boxWidth: 10, boxHeight: 10, usePointStyle: true}
@@ -839,7 +891,93 @@ python samples/call_openai_via_litellm.py</pre>
               }
             }
           }
-        }
+        })
+      });
+    }
+
+    function renderTeamCostChart() {
+      destroyChart("teamCost");
+      const rows = [...state.teams]
+        .sort((a, b) => (b.total_cost || 0) - (a.total_cost || 0))
+        .slice(0, 8);
+
+      state.charts.teamCost = new Chart($("#team-cost-chart"), {
+        type: "bar",
+        data: {
+          labels: rows.map((row) => row.team),
+          datasets: [{
+            label: "Cost",
+            data: rows.map((row) => row.total_cost || 0),
+            backgroundColor: "#7fb7a2",
+            borderRadius: 5,
+            borderSkipped: false,
+            maxBarThickness: 32
+          }]
+        },
+        options: baseChartOptions({
+          indexAxis: "y",
+          scales: {
+            x: {
+              grid: {color: chartGrid},
+              ticks: {
+                color: chartText,
+                callback: (value) => fmtMoney(value)
+              }
+            },
+            y: {
+              grid: {display: false},
+              ticks: {color: chartText}
+            }
+          },
+          plugins: {
+            ...baseChartOptions().plugins,
+            legend: {display: false},
+            tooltip: {
+              backgroundColor: "#101512",
+              borderColor: "#2d3832",
+              borderWidth: 1,
+              callbacks: {
+                label: (context) => `Cost: ${fmtMoney(context.parsed.x)}`
+              }
+            }
+          }
+        })
+      });
+    }
+
+    function renderIssueSeverityChart() {
+      destroyChart("issueSeverity");
+      const severities = ["critical", "warning", "info"];
+      const counts = severities.map((severity) => (
+        state.issues.filter((issue) => issue.severity === severity).length
+      ));
+
+      state.charts.issueSeverity = new Chart($("#issue-severity-chart"), {
+        type: "doughnut",
+        data: {
+          labels: ["Critical", "Warning", "Info"],
+          datasets: [{
+            data: counts,
+            backgroundColor: severities.map((severity) => severityPalette[severity]),
+            borderColor: "#171b19",
+            borderWidth: 3,
+            hoverOffset: 6
+          }]
+        },
+        options: baseChartOptions({
+          cutout: "62%",
+          plugins: {
+            ...baseChartOptions().plugins,
+            tooltip: {
+              backgroundColor: "#101512",
+              borderColor: "#2d3832",
+              borderWidth: 1,
+              callbacks: {
+                label: (context) => `${context.label}: ${fmtNumber(context.parsed)} issues`
+              }
+            }
+          }
+        })
       });
     }
 
@@ -903,7 +1041,10 @@ python samples/call_openai_via_litellm.py</pre>
         <article class="card issue">
           <div class="issue-head">
             <div>
-              <h2>${issue.id} ${issue.title}</h2>
+              <div class="issue-title">
+                <h2>${issue.title}</h2>
+                <span class="rule-tag">Rule ${issue.id}</span>
+              </div>
               <div class="muted">${issue.estimated_saving_pct}% estimated saving</div>
             </div>
             <span class="badge ${issue.severity}">${issue.severity}</span>
@@ -931,6 +1072,8 @@ python samples/call_openai_via_litellm.py</pre>
       if (window.Chart) {
         renderCostChart();
         renderTokenChart();
+        renderTeamCostChart();
+        renderIssueSeverityChart();
       }
     }
 
